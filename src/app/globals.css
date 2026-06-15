@@ -112,6 +112,22 @@ body {
   box-shadow: 0 0 0 1px var(--volt-glow), 0 0 24px -6px var(--volt-glow);
 }
 
+/* Form input */
+@utility input {
+  width: 100%;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  padding: 0.625rem 0.875rem;
+  font-size: 0.95rem;
+  color: var(--fg);
+}
+@utility input {
+  &::placeholder {
+    color: var(--fg-faint);
+  }
+}
+
 ::selection {
   background: var(--volt);
   color: #07090a;

@@ -55,6 +55,20 @@ export function dayOfWeekInTz(dateISO: string): number {
   return new Date(`${dateISO}T12:00:00Z`).getUTCDay();
 }
 
+/** Local calendar date (YYYY-MM-DD) for an instant, in the given timezone. */
+export function instantToLocalDateISO(iso: string, timezone: string): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date(iso));
+  const y = parts.find((p) => p.type === "year")?.value;
+  const m = parts.find((p) => p.type === "month")?.value;
+  const d = parts.find((p) => p.type === "day")?.value;
+  return `${y}-${m}-${d}`;
+}
+
 /** Local minutes-since-midnight for an instant, in the given timezone. */
 export function instantToLocalMinutes(iso: string, timezone: string): number {
   const parts = new Intl.DateTimeFormat("en-US", {
