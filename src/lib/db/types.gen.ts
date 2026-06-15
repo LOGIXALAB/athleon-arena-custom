@@ -1,9 +1,9 @@
 /**
- * Placeholder Supabase types. Regenerated in Phase 1 via:
- *   npm run db:types   (supabase gen types typescript --linked)
- * Until the schema is pushed, this keeps the service-role client typed loosely.
+ * Loose Database generic for the service-role client. The app's real type
+ * safety comes from hand-authored row types in ./tables.ts (kept in sync with
+ * supabase/migrations/0001_init.sql). To generate the full schema types later:
+ *   supabase login && supabase link --project-ref <ref> && npm run db:types
  */
-// deno-lint-ignore-file
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export type Json =
   | string
