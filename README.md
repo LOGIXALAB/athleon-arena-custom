@@ -1,36 +1,64 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Athleon Arena
 
-## Getting Started
+Digital platform for an indoor sports venue (cricket + futsal at launch) — brand
+site, booking, payments, team registration, live event-sourced scoring, big-screen
+display, ops console, and owner dashboard. Built to scale to multiple courts,
+sports, and venues without rework.
 
-First, run the development server:
+**Stack:** Next.js 16 (App Router, TypeScript) · Tailwind v4 · Supabase
+(Postgres, Auth, Realtime broadcast, Storage) · Vitest.
+
+## Quick start
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+cp .env.example .env.local      # fill in Supabase keys — see SETUP.md
+npm run dev                     # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Without Supabase keys the marketing site still renders (with seed-default data).
+For the full app (booking, scoring, admin) follow **[SETUP.md](SETUP.md)** to push
+the schema and seed data.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Scripts
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Command | What |
+|---|---|
+| `npm run dev` | Dev server |
+| `npm test` | Vitest (cricket/futsal reducers, pricing, booking) |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm run build` | Production build |
+| `npm run db:push` | Apply `supabase/migrations` to the linked project |
+| `npm run seed` | Seed reference data + staff accounts |
 
-## Learn More
+## Interfaces
 
-To learn more about Next.js, take a look at the following resources:
+| Route | Who | Auth |
+|---|---|---|
+| `/` · `/memberships` · `/gallery` | Public | none |
+| `/book/[sport]` | Public | phone captured |
+| `/manage/[token]` | Customer | capability token (roster + scoring) |
+| `/score/[matchId]` | Scorer | staff session |
+| `/display/[courtId]` | Big screen | public (kiosk) |
+| `/ops` | Ops manager | staff session |
+| `/admin` | Owner / admin | staff session |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Architecture highlights
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- **Sport plugin engine** (`src/lib/core/sports`) — pure reducers; adding a sport
+  is one module + one `sports` row. Cricket + futsal at launch.
+- **Event-sourced scoring** — `match_events` is the truth; score is derived.
+  Undo = mark reverted + re-derive. Append serialized via an `append_match_event`
+  RPC under a row lock.
+- **One capability link** does roster *and* scoring; the Score tab unlocks 30 min
+  before the slot (server-enforced). Dual auth: staff session **or** manage token.
+- **Payments** — bank transfer (+ screenshot proof), reserve & pay cash on arrival,
+  or online (Easypaisa/JazzCash adapter, stubbed behind a feature flag). Ops
+  manually confirms manual payments.
+- **Display** switches between headline and full scorecard live from the scorer
+  panel via a realtime command (persisted in `court_display_state`).
+- **Pricing** — most-specific-rule-wins engine; rules are owner-editable rows.
+- **No-overlap guarantee** — Postgres exclusion constraint, race-proof.
+- Booking lifecycle, workers (`athleon_tick`), RBAC, audit log, feature flags.
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+See [ATHLEON-BUILD-PLAN.md](ATHLEON-BUILD-PLAN.md) for the full build plan.

@@ -23,6 +23,7 @@ import {
 } from "@/lib/db/queries/booking";
 import { db } from "@/lib/db/server";
 import { zUuid } from "@/lib/validation";
+import { rateLimit, clientIp } from "@/lib/rate-limit";
 
 const Body = z.object({
   courtId: zUuid.optional(),
@@ -42,6 +43,11 @@ export async function POST(req: NextRequest) {
     const parsed = Body.safeParse(await req.json());
     if (!parsed.success) return fail("VALIDATION", parsed.error.issues[0]?.message ?? "Invalid body");
     const input = parsed.data;
+
+    // rate limit public bookings per IP + phone
+    if (!rateLimit(`book:${clientIp(req)}:${input.customer.phone}`, 6, 10 * 60_000)) {
+      return fail("VALIDATION", "Too many booking attempts. Please wait a few minutes.", 429);
+    }
 
     if (input.paymentMethod === "online" && !(await feature("online_payments"))) {
       return fail("VALIDATION", "Online payments are not available yet. Choose bank transfer or pay on arrival.");
@@ -76,6 +82,18 @@ export async function POST(req: NextRequest) {
     const amountDue = applyMembership(price.amount, membership);
 
     const customer = await upsertCustomerByPhone(input.customer.phone, input.customer.name);
+
+    // cap open unpaid reservations per customer (anti-squatting on prime slots)
+    const { count: openCount } = await db()
+      .from("bookings")
+      .select("*", { count: "exact", head: true })
+      .eq("customer_id", customer.id)
+      .in("status", ["reserved", "pending_payment", "pending_verification"])
+      .gt("starts_at", new Date().toISOString());
+    if ((openCount ?? 0) >= 3) {
+      return fail("VALIDATION", "You have too many unconfirmed bookings. Please complete or cancel one first.", 429);
+    }
+
     const now = new Date();
     const status = initialStatus(input.paymentMethod, "online");
     const hold = computeHoldExpiry(input.paymentMethod, now, new Date(input.startsAt));
