@@ -4,8 +4,13 @@ import { StaffTopBar } from "@/components/staff/StaffTopBar";
 
 const NAV = [
   { href: "/admin", label: "Overview" },
+  { href: "/admin/pricing", label: "Pricing" },
+  { href: "/admin/schedules", label: "Schedules" },
+  { href: "/admin/memberships", label: "Memberships" },
+  { href: "/admin/analytics", label: "Analytics" },
   { href: "/admin/staff", label: "Staff" },
   { href: "/admin/flags", label: "Feature flags" },
+  { href: "/admin/audit", label: "Audit log" },
 ];
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
