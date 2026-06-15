@@ -45,11 +45,13 @@ export function ManageClient({
   initial,
   roles,
   maxPlayers,
+  formats,
 }: {
   token: string;
   initial: ManageData;
   roles: string[];
   maxPlayers: number;
+  formats: { id: string; label: string }[];
 }) {
   const [tab, setTab] = useState<Tab>("booking");
   const { booking, venue, court } = initial;
@@ -96,7 +98,7 @@ export function ManageClient({
         {tab === "roster" && (
           <RosterEditor token={token} teams={initial.teams} roles={roles} maxPlayers={maxPlayers} />
         )}
-        {tab === "score" && <ScoreTab token={token} data={initial} />}
+        {tab === "score" && <ScoreTab token={token} data={initial} formats={formats} />}
       </div>
     </main>
   );

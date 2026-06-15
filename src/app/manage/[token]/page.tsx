@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { getBookingByToken } from "@/lib/db/queries/booking";
 import { getActiveSports } from "@/lib/db/queries/public";
+import { SportRegistry } from "@/lib/core/sports/registry";
 import { ManageClient } from "./ManageClient";
 
 export default async function ManagePage({ params }: { params: Promise<{ token: string }> }) {
@@ -12,6 +13,9 @@ export default async function ManagePage({ params }: { params: Promise<{ token: 
   const sport = sports.find((s) => s.id === bundle.booking.sport_id);
   const roles = sport?.roster_schema.roles ?? [];
   const maxPlayers = sport?.roster_schema.maxPlayers ?? 11;
+  const formats = SportRegistry.has(bundle.booking.sport_id)
+    ? SportRegistry.get(bundle.booking.sport_id).defaultFormats.map((f) => ({ id: f.id, label: f.label }))
+    : [];
 
   return (
     <ManageClient
@@ -41,6 +45,7 @@ export default async function ManagePage({ params }: { params: Promise<{ token: 
       }}
       roles={roles}
       maxPlayers={maxPlayers}
+      formats={formats}
     />
   );
 }
