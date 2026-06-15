@@ -1,0 +1,134 @@
+@import "tailwindcss";
+
+/*
+  Athleon Arena — floodlit-stadium design language.
+  Near-black surfaces, one electric accent (volt green) used like stadium lighting,
+  oversized condensed numerals for anything score-like.
+*/
+
+:root {
+  /* Surfaces — layered near-black */
+  --bg: #07090a;
+  --surface-1: #0d1011;
+  --surface-2: #14181a;
+  --surface-3: #1c2123;
+  --border: #262d30;
+  --border-strong: #38413f;
+
+  /* Text */
+  --fg: #eef2f0;
+  --fg-muted: #9aa6a2;
+  --fg-faint: #5e6a66;
+
+  /* Accent — volt green (the floodlight) */
+  --volt: #c8f542;
+  --volt-dim: #9bbf2f;
+  --volt-glow: rgba(200, 245, 66, 0.25);
+
+  /* Secondary signal — used sparingly for warnings/peak */
+  --signal: #ff7a33;
+  --signal-dim: #c45a23;
+
+  /* Status colors */
+  --ok: #3ad29f;
+  --warn: #ffc24b;
+  --danger: #ff5c5c;
+  --info: #4ab8ff;
+
+  --radius: 0.625rem;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-faint: var(--fg-faint);
+
+  --color-volt: var(--volt);
+  --color-volt-dim: var(--volt-dim);
+  --color-signal: var(--signal);
+
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-danger: var(--danger);
+  --color-info: var(--info);
+
+  --font-sans: var(--font-sans-stack);
+  --font-condensed: var(--font-condensed-stack);
+
+  --radius-base: var(--radius);
+}
+
+* {
+  border-color: var(--border);
+}
+
+html {
+  background: var(--bg);
+  color-scheme: dark;
+}
+
+body {
+  background:
+    radial-gradient(
+      ellipse 80% 50% at 50% -10%,
+      rgba(200, 245, 66, 0.06),
+      transparent 60%
+    ),
+    var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans-stack, ui-sans-serif, system-ui, sans-serif);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Condensed numerals for scores / big numbers */
+.numeral {
+  font-family: var(--font-condensed-stack, ui-sans-serif, sans-serif);
+  font-feature-settings: "tnum" 1;
+  letter-spacing: -0.01em;
+}
+
+/* Volt focus ring on interactive elements */
+:where(button, a, input, select, textarea):focus-visible {
+  outline: 2px solid var(--volt);
+  outline-offset: 2px;
+}
+
+/* Utility: subtle elevated card */
+@utility card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+/* Volt glow for primary CTAs / highlights */
+@utility glow {
+  box-shadow: 0 0 0 1px var(--volt-glow), 0 0 24px -6px var(--volt-glow);
+}
+
+::selection {
+  background: var(--volt);
+  color: #07090a;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--surface-3);
+  border-radius: 6px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-strong);
+}
