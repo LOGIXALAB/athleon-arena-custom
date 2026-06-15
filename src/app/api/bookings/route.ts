@@ -22,9 +22,10 @@ import {
   insertBookingWithTeams,
 } from "@/lib/db/queries/booking";
 import { db } from "@/lib/db/server";
+import { zUuid } from "@/lib/validation";
 
 const Body = z.object({
-  courtId: z.string().uuid().optional(),
+  courtId: zUuid.optional(),
   sportId: z.string().min(1),
   startsAt: z.string().datetime({ offset: true }),
   endsAt: z.string().datetime({ offset: true }),
