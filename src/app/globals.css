@@ -195,6 +195,10 @@ body {
   /* `clip` (not `hidden`) hides horizontal overflow WITHOUT making this a scroll
      container — keeps `position: sticky` scrollytelling sections pinned correctly. */
   overflow-x: clip;
+  /* Establish a stacking context so the hero's negative-z-index (`-z-10`)
+     background video paints ABOVE this wrapper's background instead of behind it
+     (a plain div's background isn't canvas-propagated like <body>'s was). */
+  isolation: isolate;
   background-color: var(--background);
   color: var(--foreground);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
