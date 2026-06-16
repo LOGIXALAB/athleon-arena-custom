@@ -192,7 +192,9 @@ body {
   --font-sans-stack: var(--font-geist-sans);
 
   min-height: 100vh;
-  overflow-x: hidden;
+  /* `clip` (not `hidden`) hides horizontal overflow WITHOUT making this a scroll
+     container — keeps `position: sticky` scrollytelling sections pinned correctly. */
+  overflow-x: clip;
   background-color: var(--background);
   color: var(--foreground);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
