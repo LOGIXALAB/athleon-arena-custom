@@ -69,7 +69,7 @@ export function BookingFlow({
   const [date, setDate] = useState(days[0]);
   const [avail, setAvail] = useState<Availability | null>(null);
   const [loading, setLoading] = useState(false);
-  const [slot, setSlot] = useState<Slot | null>(null);
+  const [selected, setSelected] = useState<Slot[]>([]);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [method, setMethod] = useState<Method | null>(null);
@@ -81,7 +81,7 @@ export function BookingFlow({
     let active = true;
     const run = async () => {
       setLoading(true);
-      setSlot(null);
+      setSelected([]);
       try {
         const a = await apiFetch<Availability>(`/api/availability?sportId=${sportId}&date=${date}`);
         if (active) setAvail(a);
@@ -97,8 +97,28 @@ export function BookingFlow({
     };
   }, [sportId, date]);
 
+  // Build a CONSECUTIVE selection: tap to start, tap an adjacent slot to extend,
+  // tap a selected slot to trim back to it, tap a far slot to restart.
+  function pickSlot(s: Slot) {
+    setSelected((prev) => {
+      if (prev.length === 0) return [s];
+      const idx = prev.findIndex((x) => x.startsAt === s.startsAt);
+      if (idx !== -1) return prev.slice(0, idx); // deselect this slot and any after it
+      const first = prev[0];
+      const last = prev[prev.length - 1];
+      if (s.startsAt === last.endsAt) return [...prev, s]; // extend forward
+      if (s.endsAt === first.startsAt) return [s, ...prev]; // extend backward
+      return [s]; // not adjacent → start a new selection
+    });
+  }
+
+  const startsAt = selected[0]?.startsAt;
+  const endsAt = selected[selected.length - 1]?.endsAt;
+  const total = selected.reduce((sum, s) => sum + s.price, 0);
+  const currency = selected[0]?.currency ?? "PKR";
+
   async function submit() {
-    if (!slot || !method) return;
+    if (!selected.length || !method) return;
     setSubmitting(true);
     setError(null);
     try {
@@ -107,8 +127,8 @@ export function BookingFlow({
         json: {
           sportId,
           courtId: avail?.courtId ?? undefined,
-          startsAt: slot.startsAt,
-          endsAt: slot.endsAt,
+          startsAt,
+          endsAt,
           paymentMethod: method,
           customer: { phone, name: name || undefined },
         },
@@ -121,7 +141,7 @@ export function BookingFlow({
     }
   }
 
-  if (result) return <Confirmation result={result} sportName={sportName} slot={slot} tz={avail?.timezone ?? "Asia/Karachi"} />;
+  if (result) return <Confirmation result={result} sportName={sportName} slots={selected} tz={avail?.timezone ?? "Asia/Karachi"} />;
 
   return (
     <div className="mt-8 space-y-8">
@@ -149,44 +169,69 @@ export function BookingFlow({
         </div>
       </Section>
 
-      {/* Step: slot */}
-      <Section step={2} title="Choose a slot">
+      {/* Step: slot(s) */}
+      <Section step={2} title="Choose your time">
         {loading ? (
           <p className="text-sm text-fg-muted">Loading availability…</p>
         ) : !avail || avail.slots.length === 0 ? (
           <p className="text-sm text-fg-muted">No slots available that day.</p>
         ) : (
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {avail.slots.map((s) => {
-              const on = slot?.startsAt === s.startsAt;
-              return (
-                <button
-                  key={s.startsAt}
-                  disabled={!s.available}
-                  onClick={() => setSlot(s)}
-                  className={
-                    "rounded-lg border px-3 py-3 text-left transition " +
-                    (!s.available
-                      ? "cursor-not-allowed border-border bg-surface-1 opacity-40"
-                      : on
-                        ? "border-volt bg-volt/10"
-                        : "border-border bg-surface-2 hover:bg-surface-3")
-                  }
-                >
-                  <div className="numeral text-lg font-semibold">{fmtTime(s.startsAt, avail.timezone)}</div>
-                  <div className="flex items-center justify-between text-xs text-fg-muted">
-                    <span>{s.priceLabel ?? ""}</span>
-                    <span className="font-medium text-fg">{s.currency} {s.price.toLocaleString()}</span>
+          <>
+            <p className="mb-3 text-xs text-fg-muted">
+              Tap a time, then tap the next one to add more hours.
+            </p>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {avail.slots.map((s) => {
+                const on = selected.some((x) => x.startsAt === s.startsAt);
+                return (
+                  <button
+                    key={s.startsAt}
+                    disabled={!s.available}
+                    onClick={() => pickSlot(s)}
+                    className={
+                      "rounded-lg border px-3 py-3 text-left transition " +
+                      (!s.available
+                        ? "cursor-not-allowed border-border bg-surface-1 opacity-40"
+                        : on
+                          ? "border-volt bg-volt/15 ring-1 ring-volt"
+                          : "border-border bg-surface-2 hover:bg-surface-3")
+                    }
+                  >
+                    <div className="numeral text-lg font-semibold">{fmtTime(s.startsAt, avail.timezone)}</div>
+                    <div className="flex items-center justify-between text-xs text-fg-muted">
+                      <span>{s.priceLabel ?? ""}</span>
+                      <span className="font-medium text-fg">{s.currency} {s.price.toLocaleString()}</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {selected.length > 0 && (
+              <div className="mt-4 flex items-center justify-between rounded-lg border border-volt/40 bg-volt/10 px-4 py-3">
+                <div>
+                  <div className="numeral font-semibold">
+                    {selected.length} hour{selected.length > 1 ? "s" : ""} ·{" "}
+                    {fmtTime(startsAt!, avail.timezone)} – {fmtTime(endsAt!, avail.timezone)}
                   </div>
-                </button>
-              );
-            })}
-          </div>
+                  <button
+                    onClick={() => setSelected([])}
+                    className="text-xs text-fg-muted underline-offset-2 hover:underline"
+                  >
+                    Clear
+                  </button>
+                </div>
+                <div className="numeral text-xl font-bold text-volt">
+                  {currency} {total.toLocaleString()}
+                </div>
+              </div>
+            )}
+          </>
         )}
       </Section>
 
       {/* Step: details */}
-      {slot && (
+      {selected.length > 0 && (
         <Section step={3} title="Your details">
           <div className="grid gap-3 sm:grid-cols-2">
             <input
@@ -206,7 +251,7 @@ export function BookingFlow({
       )}
 
       {/* Step: payment */}
-      {slot && phone.length >= 6 && (
+      {selected.length > 0 && phone.length >= 6 && (
         <Section step={4} title="How will you pay?">
           <div className="grid gap-3">
             <PayCard
@@ -297,15 +342,18 @@ function PayCard({
 function Confirmation({
   result,
   sportName,
-  slot,
+  slots,
   tz,
 }: {
   result: BookingResult;
   sportName: string;
-  slot: Slot | null;
+  slots: Slot[];
   tz: string;
 }) {
-  const when = slot ? `${fmtTime(slot.startsAt, tz)} – ${fmtTime(slot.endsAt, tz)}` : "";
+  const when =
+    slots.length > 0
+      ? `${fmtTime(slots[0].startsAt, tz)} – ${fmtTime(slots[slots.length - 1].endsAt, tz)}`
+      : "";
   return (
     <div className="mt-10 space-y-6">
       <div className="card glow p-6 text-center">
