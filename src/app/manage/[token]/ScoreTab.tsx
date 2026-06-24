@@ -46,7 +46,14 @@ export function ScoreTab({
   }
 
   if (matchId) {
-    return <ScorePanel matchId={matchId} manageToken={token} />;
+    return (
+      <ScorePanel
+        matchId={matchId}
+        manageToken={token}
+        endsAt={data.booking.endsAt}
+        onStartNewMatch={() => setMatchId(null)}
+      />
+    );
   }
 
   async function startMatch(formatId: string) {

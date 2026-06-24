@@ -3,19 +3,17 @@ import { z } from "zod";
 import { ok, fail, handle } from "@/lib/api";
 import { publicEnv } from "@/lib/env";
 import { feature } from "@/lib/config/features";
-import { resolvePrice } from "@/lib/core/pricing/engine";
-import { applyMembership } from "@/lib/core/memberships/apply";
+import { computeAvailability } from "@/lib/core/booking/availability";
 import { initialStatus } from "@/lib/core/booking/transitions";
 import { computeHoldExpiry } from "@/lib/core/booking/holds";
-import {
-  dayOfWeekInTz,
-  instantToLocalDateISO,
-  instantToLocalMinutes,
-} from "@/lib/core/booking/slots";
+import { dayOfWeekInTz, instantToLocalDateISO } from "@/lib/core/booking/slots";
 import {
   getCourtsForSport,
   getCourtWithVenue,
   courtSupportsSport,
+  getScheduleForDay,
+  getLiveBookingsAround,
+  getBlocksAround,
   getActivePricingRules,
   getActiveMembershipByPhone,
   upsertCustomerByPhone,
@@ -68,18 +66,54 @@ export async function POST(req: NextRequest) {
     const tz = court.venue.timezone;
     if (new Date(input.startsAt) <= new Date())
       return fail("VALIDATION", "That slot is in the past");
+    if (new Date(input.endsAt) <= new Date(input.startsAt))
+      return fail("VALIDATION", "End time must be after start time");
 
-    // server-side price (never trust the client)
-    const rules = await getActivePricingRules(court.venue.id);
+    // server-side pricing over the FULL range (never trust the client). Reuse the
+    // availability engine so a multi-hour booking is priced slot-by-slot (peak +
+    // off-peak summed) and we re-validate the range is whole, consecutive & free.
     const localDate = instantToLocalDateISO(input.startsAt, tz);
-    const price = resolvePrice(rules, {
+    const dow = dayOfWeekInTz(localDate);
+    const dayStart = new Date(`${localDate}T00:00:00Z`);
+    const fromISO = new Date(dayStart.getTime() - 24 * 3600_000).toISOString();
+    const toISO = new Date(dayStart.getTime() + 48 * 3600_000).toISOString();
+    const [schedule, busy, blocks, rules, membership] = await Promise.all([
+      getScheduleForDay(courtId, dow),
+      getLiveBookingsAround(courtId, fromISO, toISO),
+      getBlocksAround(courtId, fromISO, toISO),
+      getActivePricingRules(court.venue.id),
+      getActiveMembershipByPhone(input.customer.phone),
+    ]);
+    const daySlots = computeAvailability({
       courtId,
       sportId: input.sportId,
-      dow: dayOfWeekInTz(localDate),
-      startMinutes: instantToLocalMinutes(input.startsAt, tz),
+      dateISO: localDate,
+      timezone: tz,
+      schedule: schedule
+        ? { opens: schedule.opens, closes: schedule.closes, slotMinutes: schedule.slot_minutes }
+        : null,
+      busy,
+      blocks,
+      rules,
+      membership,
+      now: new Date(),
     });
-    const membership = await getActiveMembershipByPhone(input.customer.phone);
-    const amountDue = applyMembership(price.amount, membership);
+    // the slots that make up the requested [startsAt, endsAt) range
+    const within = daySlots.filter(
+      (s) => s.startsAt >= input.startsAt && s.endsAt <= input.endsAt,
+    );
+    const contiguous =
+      within.length > 0 &&
+      within[0].startsAt === input.startsAt &&
+      within[within.length - 1].endsAt === input.endsAt &&
+      within.every((s, i) => i === 0 || s.startsAt === within[i - 1].endsAt);
+    if (!contiguous) return fail("VALIDATION", "Please pick consecutive available slots");
+    if (!within.every((s) => s.available))
+      return fail("SLOT_TAKEN", "One or more of those slots are no longer available", 409);
+
+    const amountDue = within.reduce((sum, s) => sum + s.price, 0);
+    const currency = within[0].currency;
+    const priceLabel = within.length > 1 ? `${within.length} hours` : within[0].priceLabel;
 
     const customer = await upsertCustomerByPhone(input.customer.phone, input.customer.name);
 
@@ -128,8 +162,8 @@ export async function POST(req: NextRequest) {
         bookingId: booking.id,
         status: booking.status,
         amountDue,
-        currency: price.currency,
-        priceLabel: price.label,
+        currency,
+        priceLabel,
         paymentMethod: input.paymentMethod,
         manageToken: booking.management_token,
         manageUrl: `${publicEnv.siteUrl}/manage/${booking.management_token}`,

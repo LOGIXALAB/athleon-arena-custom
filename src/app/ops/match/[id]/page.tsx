@@ -14,8 +14,18 @@ export default async function OpsMatchPage({ params }: { params: Promise<{ id: s
   const booking = bookingData as Booking | null;
   if (!booking) redirect("/ops");
 
-  const { data: existing } = await db().from("matches").select("*").eq("booking_id", id).maybeSingle();
-  if (existing) redirect(`/score/${(existing as Match).id}`);
+  const { data: matchRows } = await db()
+    .from("matches")
+    .select("*")
+    .eq("booking_id", id)
+    .order("created_at", { ascending: false })
+    .limit(1);
+  const latest = (matchRows as Match[] | null)?.[0] ?? null;
+  // Active match → hand off to scoring. A finished match → fall through to the
+  // format picker so staff can start a fresh match (allowed while time remains).
+  if (latest && latest.status !== "completed" && latest.status !== "abandoned") {
+    redirect(`/score/${latest.id}`);
+  }
 
   const formats = SportRegistry.has(booking.sport_id)
     ? SportRegistry.get(booking.sport_id).defaultFormats.map((f) => ({ id: f.id, label: f.label }))

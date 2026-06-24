@@ -148,3 +148,149 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--border-strong);
 }
+
+/* ============================================================
+   LANDING (cinematic marketing site) — navy + lime brand theme.
+   Scoped to the `.theme-site` wrapper (see app/(site)/layout.tsx) so the
+   booking/ops/admin app keeps its floodlit dark + volt theme above, untouched.
+   These color/font tokens only resolve inside `.theme-site`.
+   ============================================================ */
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-border-subtle: var(--border-subtle);
+
+  --color-lime: var(--lime);
+  --color-lime-soft: var(--lime-soft);
+  --color-lime-dim: var(--lime-dim);
+
+  /* legacy aliases used by some landing components → brand lime */
+  --color-neon-orange: var(--lime);
+  --color-neon-orange-soft: var(--lime-soft);
+  --color-neon-green: var(--lime);
+  --color-neon-green-soft: var(--lime-soft);
+
+  --font-display: var(--font-orbitron);
+  --font-mono: var(--font-geist-mono);
+}
+
+.theme-site {
+  /* navy canvas + lime accent */
+  --background: #0c0f2e;
+  --foreground: #eaf0ff;
+  --surface: #171b40;
+  --surface-2: #1e2452;                 /* re-scopes the app's dark surface-2 within the landing */
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border: rgba(255, 255, 255, 0.08);  /* re-scopes the generic border for the landing */
+  --lime: #c0ff00;
+  --lime-soft: #d6ff5c;
+  --lime-dim: rgba(192, 255, 0, 0.15);
+
+  /* landing fonts (Geist body, Orbitron display) */
+  --font-sans-stack: var(--font-geist-sans);
+
+  min-height: 100vh;
+  /* `clip` (not `hidden`) hides horizontal overflow WITHOUT making this a scroll
+     container — keeps `position: sticky` scrollytelling sections pinned correctly. */
+  overflow-x: clip;
+  /* Establish a stacking context so the hero's negative-z-index (`-z-10`)
+     background video paints ABOVE this wrapper's background instead of behind it
+     (a plain div's background isn't canvas-propagated like <body>'s was). */
+  isolation: isolate;
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  /* faint stadium-floodlight glow anchored top-center (lime over navy) */
+  background-image:
+    radial-gradient(60rem 40rem at 50% -10%, rgba(192, 255, 0, 0.1), transparent 60%),
+    radial-gradient(50rem 40rem at 90% 10%, rgba(192, 255, 0, 0.05), transparent 60%);
+}
+
+.theme-site ::selection {
+  background: var(--lime);
+  color: #0c0f2e;
+}
+
+/* ----- Reusable cinematic utilities (used by the landing) ----- */
+@layer utilities {
+  .text-gradient {
+    background: linear-gradient(110deg, var(--lime) 0%, #f0ffc0 50%, var(--lime) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .neon-lime,
+  .neon-orange,
+  .neon-green {
+    color: var(--lime-soft);
+    text-shadow: 0 0 8px rgba(192, 255, 0, 0.55), 0 0 28px rgba(192, 255, 0, 0.32);
+  }
+
+  .glow-lime,
+  .glow-orange,
+  .glow-green {
+    box-shadow: 0 0 0 1px rgba(192, 255, 0, 0.4), 0 0 24px -4px rgba(192, 255, 0, 0.5);
+  }
+
+  .glass {
+    background: rgba(23, 27, 64, 0.55);
+    backdrop-filter: blur(14px) saturate(140%);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+    border: 1px solid var(--border);
+  }
+
+  .led-pixels {
+    background-image: radial-gradient(circle, rgba(255, 255, 255, 0.07) 1px, transparent 1.4px);
+    background-size: 6px 6px;
+  }
+
+  .grid-lines {
+    background-image:
+      linear-gradient(to right, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+    background-size: 56px 56px;
+  }
+
+  .animate-marquee {
+    animation: marquee 28s linear infinite;
+  }
+
+  .font-scoreboard {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.05em;
+  }
+}
+
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+@keyframes flicker {
+  0%, 100% { opacity: 1; }
+  92% { opacity: 1; }
+  94% { opacity: 0.55; }
+  96% { opacity: 1; }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-marquee {
+    animation: none;
+  }
+  .theme-site *,
+  .theme-site *::before,
+  .theme-site *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

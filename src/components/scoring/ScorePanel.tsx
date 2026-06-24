@@ -22,7 +22,19 @@ export interface Snapshot {
   displayMode: "headline" | "scorecard";
 }
 
-export function ScorePanel({ matchId, manageToken }: { matchId: string; manageToken?: string }) {
+export function ScorePanel({
+  matchId,
+  manageToken,
+  endsAt,
+  onStartNewMatch,
+}: {
+  matchId: string;
+  manageToken?: string;
+  /** Booking slot end (ISO). Used to offer a rematch only while time remains. */
+  endsAt?: string;
+  /** Called when the user starts a fresh match after this one finished. */
+  onStartNewMatch?: () => void;
+}) {
   const [snap, setSnap] = useState<Snapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -95,8 +107,19 @@ export function ScorePanel({ matchId, manageToken }: { matchId: string; manageTo
   if (!snap) return <div className="card p-6 text-fg-muted">Loading match…</div>;
 
   const sb = snap.scoreboard;
+  const timeLeft = !endsAt || Date.now() < new Date(endsAt).getTime();
   return (
     <div className="space-y-4">
+      {/* match finished + slot time remaining → offer a fresh match */}
+      {snap.isComplete && onStartNewMatch && timeLeft && (
+        <button
+          onClick={onStartNewMatch}
+          className="w-full rounded-lg border border-volt bg-volt/10 px-4 py-3 text-sm font-semibold text-volt transition hover:bg-volt/20"
+        >
+          + Start a new match — time still left in your slot
+        </button>
+      )}
+
       {/* headline */}
       <div className="card p-4">
         <div className="flex items-center justify-between">

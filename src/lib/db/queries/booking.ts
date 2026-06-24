@@ -238,7 +238,7 @@ async function hydrateBooking(booking: Booking): Promise<BookingBundle> {
     sb.from("venues").select("*").eq("id", booking.venue_id).single(),
     sb.from("courts").select("*").eq("id", booking.court_id).single(),
     sb.from("teams").select("*").eq("booking_id", booking.id).order("side"),
-    sb.from("matches").select("*").eq("booking_id", booking.id).maybeSingle(),
+    sb.from("matches").select("*").eq("booking_id", booking.id).order("created_at", { ascending: false }).limit(1),
     sb.from("payments").select("*").eq("booking_id", booking.id).order("created_at"),
     sb.from("payment_proofs").select("*").eq("booking_id", booking.id).order("uploaded_at"),
   ]);
@@ -258,7 +258,7 @@ async function hydrateBooking(booking: Booking): Promise<BookingBundle> {
     venue: venueRes.data as Venue,
     court: courtRes.data as Court,
     teams: teamsWithPlayers,
-    match: (matchRes.data as Match) ?? null,
+    match: (matchRes.data as Match[] | null)?.[0] ?? null,
     payments: (payRes.data as Payment[]) ?? [],
     proofs: (proofRes.data as PaymentProof[]) ?? [],
   };

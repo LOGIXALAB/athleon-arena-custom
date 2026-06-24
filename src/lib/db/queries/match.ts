@@ -110,8 +110,22 @@ export async function createMatchForBooking(bookingId: string, formatId: string,
   const booking = bookingData as Booking | null;
   if (!booking) throw new DomainError("NOT_FOUND", "Booking not found");
 
-  const { data: existing } = await sb.from("matches").select("*").eq("booking_id", bookingId).maybeSingle();
-  if (existing) return existing as Match;
+  // A booking can hold more than one match. Reuse the current match while it's
+  // still in progress; only start a fresh one once the previous has finished AND
+  // there is still time left in the slot.
+  const { data: latestRows } = await sb
+    .from("matches")
+    .select("*")
+    .eq("booking_id", bookingId)
+    .order("created_at", { ascending: false })
+    .limit(1);
+  const latest = (latestRows as Match[] | null)?.[0] ?? null;
+  if (latest && latest.status !== "completed" && latest.status !== "abandoned") {
+    return latest; // a match is already in progress for this booking
+  }
+  if (latest && new Date(booking.ends_at).getTime() <= Date.now()) {
+    throw new DomainError("SCORING_LOCKED", "No time left in this slot to start a new match.");
+  }
 
   const mod = SportRegistry.get(booking.sport_id);
   const fmt = mod.defaultFormats.find((f) => f.id === formatId) ?? mod.defaultFormats[0];
