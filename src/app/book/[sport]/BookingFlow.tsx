@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { apiFetch } from "@/lib/client";
 import { ProofUpload } from "@/components/booking/ProofUpload";
@@ -117,6 +117,18 @@ export function BookingFlow({
   const total = selected.reduce((sum, s) => sum + s.price, 0);
   const currency = selected[0]?.currency ?? "PKR";
 
+  // On mobile the checkout stacks below the slots; bring it into view the moment
+  // the first slot is picked so the user doesn't have to hunt for the form.
+  const checkoutRef = useRef<HTMLDivElement>(null);
+  const prevLen = useRef(0);
+  useEffect(() => {
+    const wasEmpty = prevLen.current === 0;
+    prevLen.current = selected.length;
+    if (wasEmpty && selected.length > 0 && window.matchMedia("(max-width: 1023px)").matches) {
+      checkoutRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [selected.length]);
+
   async function submit() {
     if (!selected.length || !method) return;
     setSubmitting(true);
@@ -143,148 +155,175 @@ export function BookingFlow({
 
   if (result) return <Confirmation result={result} sportName={sportName} slots={selected} tz={avail?.timezone ?? "Asia/Karachi"} />;
 
-  return (
-    <div className="mt-8 space-y-8">
-      {/* Step: date */}
-      <Section step={1} title="Pick a date">
-        <div className="flex gap-2 overflow-x-auto pb-2">
-          {days.map((d) => {
-            const l = fmtDayLabel(d);
-            const on = d === date;
-            return (
-              <button
-                key={d}
-                onClick={() => setDate(d)}
-                className={
-                  "flex min-w-16 flex-col items-center rounded-lg border px-3 py-2 transition " +
-                  (on ? "border-volt bg-volt text-[#07090a]" : "border-border bg-surface-2 hover:bg-surface-3")
-                }
-              >
-                <span className="text-xs uppercase">{l.dow}</span>
-                <span className="numeral text-xl font-bold">{l.day}</span>
-                <span className="text-xs">{l.mon}</span>
-              </button>
-            );
-          })}
-        </div>
-      </Section>
+  const dl = fmtDayLabel(date);
+  const tz = avail?.timezone ?? "Asia/Karachi";
 
-      {/* Step: slot(s) */}
-      <Section step={2} title="Choose your time">
-        {loading ? (
-          <p className="text-sm text-fg-muted">Loading availability…</p>
-        ) : !avail || avail.slots.length === 0 ? (
-          <p className="text-sm text-fg-muted">No slots available that day.</p>
+  return (
+    <div className="mt-8 lg:grid lg:grid-cols-[1.5fr_1fr] lg:items-start lg:gap-8">
+      {/* LEFT — date + slots */}
+      <div className="min-w-0 space-y-8">
+        <Section step={1} title="Pick a date">
+          <div className="flex gap-2 overflow-x-auto pb-2">
+            {days.map((d) => {
+              const l = fmtDayLabel(d);
+              const on = d === date;
+              return (
+                <button
+                  key={d}
+                  onClick={() => setDate(d)}
+                  className={
+                    "flex min-w-16 flex-col items-center rounded-lg border px-3 py-2 transition " +
+                    (on ? "border-volt bg-volt text-[#07090a]" : "border-border bg-surface-2 hover:bg-surface-3")
+                  }
+                >
+                  <span className="text-xs uppercase">{l.dow}</span>
+                  <span className="numeral text-xl font-bold">{l.day}</span>
+                  <span className="text-xs">{l.mon}</span>
+                </button>
+              );
+            })}
+          </div>
+        </Section>
+
+        <Section step={2} title="Choose your time">
+          {loading ? (
+            <p className="text-sm text-fg-muted">Loading availability…</p>
+          ) : !avail || avail.slots.length === 0 ? (
+            <p className="text-sm text-fg-muted">No slots available that day.</p>
+          ) : (
+            <>
+              <p className="mb-3 text-xs text-fg-muted">
+                Tap a time, then tap the next one to add more hours.
+              </p>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {avail.slots.map((s) => {
+                  const on = selected.some((x) => x.startsAt === s.startsAt);
+                  return (
+                    <button
+                      key={s.startsAt}
+                      disabled={!s.available}
+                      onClick={() => pickSlot(s)}
+                      className={
+                        "rounded-lg border px-3 py-3 text-left transition " +
+                        (!s.available
+                          ? "cursor-not-allowed border-border bg-surface-1 opacity-40"
+                          : on
+                            ? "border-volt bg-volt/15 ring-1 ring-volt"
+                            : "border-border bg-surface-2 hover:bg-surface-3")
+                      }
+                    >
+                      <div className="numeral text-lg font-semibold">{fmtTime(s.startsAt, avail.timezone)}</div>
+                      <div className="flex items-center justify-between text-xs text-fg-muted">
+                        <span>{s.priceLabel ?? ""}</span>
+                        <span className="font-medium text-fg">{s.currency} {s.price.toLocaleString()}</span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </Section>
+      </div>
+
+      {/* RIGHT — sticky checkout (stacks below on mobile) */}
+      <div ref={checkoutRef} className="mt-8 min-w-0 scroll-mt-6 lg:mt-0 lg:sticky lg:top-6">
+        {selected.length === 0 ? (
+          <div className="card flex flex-col items-center p-8 text-center text-fg-muted">
+            <div className="text-3xl">🗓️</div>
+            <p className="mt-3 text-sm">Pick a time to continue your booking.</p>
+          </div>
         ) : (
-          <>
-            <p className="mb-3 text-xs text-fg-muted">
-              Tap a time, then tap the next one to add more hours.
-            </p>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {avail.slots.map((s) => {
-                const on = selected.some((x) => x.startsAt === s.startsAt);
-                return (
-                  <button
-                    key={s.startsAt}
-                    disabled={!s.available}
-                    onClick={() => pickSlot(s)}
-                    className={
-                      "rounded-lg border px-3 py-3 text-left transition " +
-                      (!s.available
-                        ? "cursor-not-allowed border-border bg-surface-1 opacity-40"
-                        : on
-                          ? "border-volt bg-volt/15 ring-1 ring-volt"
-                          : "border-border bg-surface-2 hover:bg-surface-3")
-                    }
-                  >
-                    <div className="numeral text-lg font-semibold">{fmtTime(s.startsAt, avail.timezone)}</div>
-                    <div className="flex items-center justify-between text-xs text-fg-muted">
-                      <span>{s.priceLabel ?? ""}</span>
-                      <span className="font-medium text-fg">{s.currency} {s.price.toLocaleString()}</span>
-                    </div>
-                  </button>
-                );
-              })}
+          <div className="card space-y-5 p-5">
+            {/* summary */}
+            <div className="flex items-start justify-between border-b border-border pb-4">
+              <div>
+                <div className="numeral text-lg font-semibold">
+                  {selected.length} hour{selected.length > 1 ? "s" : ""}
+                </div>
+                <div className="text-sm text-fg-muted">
+                  {fmtTime(startsAt!, tz)} – {fmtTime(endsAt!, tz)}
+                </div>
+                <div className="text-xs text-fg-faint">
+                  {sportName} · {dl.dow} {dl.day} {dl.mon}
+                </div>
+                <button
+                  onClick={() => setSelected([])}
+                  className="mt-1 text-xs text-fg-muted underline-offset-2 hover:underline"
+                >
+                  Clear
+                </button>
+              </div>
+              <div className="numeral text-2xl font-bold text-volt">
+                {currency} {total.toLocaleString()}
+              </div>
             </div>
 
-            {selected.length > 0 && (
-              <div className="mt-4 flex items-center justify-between rounded-lg border border-volt/40 bg-volt/10 px-4 py-3">
-                <div>
-                  <div className="numeral font-semibold">
-                    {selected.length} hour{selected.length > 1 ? "s" : ""} ·{" "}
-                    {fmtTime(startsAt!, avail.timezone)} – {fmtTime(endsAt!, avail.timezone)}
-                  </div>
-                  <button
-                    onClick={() => setSelected([])}
-                    className="text-xs text-fg-muted underline-offset-2 hover:underline"
-                  >
-                    Clear
-                  </button>
-                </div>
-                <div className="numeral text-xl font-bold text-volt">
-                  {currency} {total.toLocaleString()}
+            {/* details */}
+            <div>
+              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">Your details</div>
+              <div className="grid gap-3">
+                <input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Your name (optional)"
+                  className="input"
+                />
+                <input
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="Phone (e.g. 0300 1234567)"
+                  className="input"
+                />
+              </div>
+            </div>
+
+            {/* payment */}
+            {phone.length >= 6 && (
+              <div>
+                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">How will you pay?</div>
+                <div className="grid gap-2">
+                  <PayCard
+                    active={method === "bank_transfer"}
+                    onClick={() => setMethod("bank_transfer")}
+                    title="Bank transfer"
+                    desc="Transfer now and upload a screenshot — we verify it within minutes."
+                  />
+                  <PayCard
+                    active={method === "cash_on_arrival"}
+                    onClick={() => setMethod("cash_on_arrival")}
+                    title="Reserve & pay cash on arrival"
+                    desc="Lock the slot now, pay at the ground when you arrive."
+                  />
+                  <PayCard
+                    active={method === "online"}
+                    onClick={() => onlineEnabled && setMethod("online")}
+                    disabled={!onlineEnabled}
+                    title="Pay online (Easypaisa / JazzCash)"
+                    desc={onlineEnabled ? "Pay securely online now." : "Coming soon."}
+                  />
                 </div>
               </div>
             )}
-          </>
+
+            {error && <p className="text-sm text-danger">{error}</p>}
+
+            <button
+              disabled={!method || phone.length < 6 || submitting}
+              onClick={submit}
+              className="w-full rounded-lg bg-volt px-6 py-3 font-semibold text-[#07090a] transition enabled:hover:bg-volt-dim disabled:opacity-40"
+            >
+              {submitting
+                ? "Booking…"
+                : phone.length < 6
+                  ? "Enter your phone to continue"
+                  : !method
+                    ? "Choose a payment method"
+                    : `Confirm booking · ${currency} ${total.toLocaleString()}`}
+            </button>
+          </div>
         )}
-      </Section>
-
-      {/* Step: details */}
-      {selected.length > 0 && (
-        <Section step={3} title="Your details">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Your name (optional)"
-              className="input"
-            />
-            <input
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="Phone (e.g. 0300 1234567)"
-              className="input"
-            />
-          </div>
-        </Section>
-      )}
-
-      {/* Step: payment */}
-      {selected.length > 0 && phone.length >= 6 && (
-        <Section step={4} title="How will you pay?">
-          <div className="grid gap-3">
-            <PayCard
-              active={method === "bank_transfer"}
-              onClick={() => setMethod("bank_transfer")}
-              title="Bank transfer"
-              desc="Transfer now and upload a screenshot — we verify it within minutes."
-            />
-            <PayCard
-              active={method === "cash_on_arrival"}
-              onClick={() => setMethod("cash_on_arrival")}
-              title="Reserve & pay cash on arrival"
-              desc="Lock the slot now, pay at the ground when you arrive."
-            />
-            <PayCard
-              active={method === "online"}
-              onClick={() => onlineEnabled && setMethod("online")}
-              disabled={!onlineEnabled}
-              title="Pay online (Easypaisa / JazzCash)"
-              desc={onlineEnabled ? "Pay securely online now." : "Coming soon."}
-            />
-          </div>
-
-          {error && <p className="mt-4 text-sm text-danger">{error}</p>}
-          <button
-            disabled={!method || submitting}
-            onClick={submit}
-            className="mt-5 w-full rounded-lg bg-volt px-6 py-3 font-semibold text-[#07090a] transition enabled:hover:bg-volt-dim disabled:opacity-40"
-          >
-            {submitting ? "Booking…" : "Confirm booking"}
-          </button>
-        </Section>
-      )}
+      </div>
     </div>
   );
 }

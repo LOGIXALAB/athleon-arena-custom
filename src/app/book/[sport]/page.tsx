@@ -13,10 +13,10 @@ export default async function BookSportPage({
   const match = sports.find((s) => s.id === sport);
   if (!match) notFound();
   const onlineEnabled = await feature("online_payments");
-  const home = process.env.NEXT_PUBLIC_MARKETING_URL || "/book";
+  const home = process.env.NEXT_PUBLIC_MARKETING_URL || "/";
 
   return (
-    <main className="mx-auto max-w-3xl px-5 py-10">
+    <main className="mx-auto max-w-7xl px-5 py-10">
       <a href={home} className="text-sm text-fg-muted transition hover:text-fg">
         ← Athleon Arena
       </a>
