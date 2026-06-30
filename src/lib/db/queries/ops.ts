@@ -14,7 +14,7 @@ import {
   insertBookingWithTeams,
   upsertCustomerByPhone,
 } from "./booking";
-import type { Booking, Court, Customer, Payment, PaymentProof, Venue } from "@/lib/db/tables";
+import type { Booking, Court, PaymentProof, Venue } from "@/lib/db/tables";
 
 export async function resolveStaffVenue(staffVenueId: string | null): Promise<Venue> {
   const sb = db();
@@ -47,22 +47,46 @@ export interface OpsBooking {
   hasMatch: boolean;
 }
 
-/** Hydrate raw bookings with customer / payment / proof / match info for the ops board. */
+/**
+ * Hydrate raw bookings with customer / payment / proof / match info for the ops
+ * board. Uses 4 bulk queries (not 4 per booking) so week/month ranges stay fast.
+ */
 async function hydrateOpsBookings(bookings: Booking[], courtList: Court[]): Promise<OpsBooking[]> {
-  const sb = db();
   const courtName = (id: string) => courtList.find((c) => c.id === id)?.name ?? "Court";
-  const result: OpsBooking[] = [];
-  for (const b of bookings) {
-    const [cust, pays, proofs, match] = await Promise.all([
-      b.customer_id
-        ? sb.from("customers").select("full_name, phone").eq("id", b.customer_id).maybeSingle()
-        : Promise.resolve({ data: null }),
-      sb.from("payments").select("status").eq("booking_id", b.id).order("created_at", { ascending: false }).limit(1),
-      sb.from("payment_proofs").select("id", { count: "exact", head: true }).eq("booking_id", b.id),
-      sb.from("matches").select("id", { head: true, count: "exact" }).eq("booking_id", b.id),
-    ]);
-    const c = cust.data as Pick<Customer, "full_name" | "phone"> | null;
-    result.push({
+  if (bookings.length === 0) return [];
+
+  const sb = db();
+  const bookingIds = bookings.map((b) => b.id);
+  const customerIds = [...new Set(bookings.map((b) => b.customer_id).filter((x): x is string => !!x))];
+
+  const [custRes, payRes, proofRes, matchRes] = await Promise.all([
+    customerIds.length
+      ? sb.from("customers").select("id, full_name, phone").in("id", customerIds)
+      : Promise.resolve({ data: [] as { id: string; full_name: string | null; phone: string }[] }),
+    sb.from("payments").select("booking_id, status, created_at").in("booking_id", bookingIds).order("created_at", { ascending: false }),
+    sb.from("payment_proofs").select("booking_id").in("booking_id", bookingIds),
+    sb.from("matches").select("booking_id").in("booking_id", bookingIds),
+  ]);
+
+  const custById = new Map<string, { full_name: string | null; phone: string }>();
+  for (const c of (custRes.data as { id: string; full_name: string | null; phone: string }[]) ?? []) {
+    custById.set(c.id, { full_name: c.full_name, phone: c.phone });
+  }
+  // rows are newest-first → first seen per booking is the latest payment
+  const payByBooking = new Map<string, string>();
+  for (const p of (payRes.data as { booking_id: string; status: string }[]) ?? []) {
+    if (!payByBooking.has(p.booking_id)) payByBooking.set(p.booking_id, p.status);
+  }
+  const proofCount = new Map<string, number>();
+  for (const pr of (proofRes.data as { booking_id: string }[]) ?? []) {
+    proofCount.set(pr.booking_id, (proofCount.get(pr.booking_id) ?? 0) + 1);
+  }
+  const hasMatch = new Set<string>();
+  for (const m of (matchRes.data as { booking_id: string }[]) ?? []) hasMatch.add(m.booking_id);
+
+  return bookings.map((b) => {
+    const c = b.customer_id ? custById.get(b.customer_id) : null;
+    return {
       id: b.id,
       courtId: b.court_id,
       courtName: courtName(b.court_id),
@@ -78,12 +102,11 @@ async function hydrateOpsBookings(bookings: Booking[], courtList: Court[]): Prom
       customerName: c?.full_name ?? null,
       customerPhone: c?.phone ?? null,
       managementToken: b.management_token,
-      paymentStatus: (pays.data as Pick<Payment, "status">[])?.[0]?.status ?? null,
-      proofCount: (proofs as { count: number | null }).count ?? 0,
-      hasMatch: ((match as { count: number | null }).count ?? 0) > 0,
-    });
-  }
-  return result;
+      paymentStatus: payByBooking.get(b.id) ?? null,
+      proofCount: proofCount.get(b.id) ?? 0,
+      hasMatch: hasMatch.has(b.id),
+    };
+  });
 }
 
 export async function getOpsToday(venue: Venue, dateISO: string): Promise<{ courts: Court[]; bookings: OpsBooking[] }> {
