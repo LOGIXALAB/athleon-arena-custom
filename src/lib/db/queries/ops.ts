@@ -47,26 +47,10 @@ export interface OpsBooking {
   hasMatch: boolean;
 }
 
-export async function getOpsToday(venue: Venue, dateISO: string): Promise<{ courts: Court[]; bookings: OpsBooking[] }> {
+/** Hydrate raw bookings with customer / payment / proof / match info for the ops board. */
+async function hydrateOpsBookings(bookings: Booking[], courtList: Court[]): Promise<OpsBooking[]> {
   const sb = db();
-  const tz = venue.timezone;
-  const dayStart = fromZonedTime(`${dateISO}T00:00:00`, tz);
-  const dayEnd = new Date(dayStart.getTime() + 24 * 3600_000);
-
-  const { data: courts } = await sb.from("courts").select("*").eq("venue_id", venue.id).order("name");
-  const { data: rows } = await sb
-    .from("bookings")
-    .select("*")
-    .eq("venue_id", venue.id)
-    .gte("starts_at", dayStart.toISOString())
-    .lt("starts_at", dayEnd.toISOString())
-    .order("starts_at");
-
-  const bookings = (rows as Booking[]) ?? [];
-  const courtList = (courts as Court[]) ?? [];
   const courtName = (id: string) => courtList.find((c) => c.id === id)?.name ?? "Court";
-
-  // hydrate customer / payment / proof / match info
   const result: OpsBooking[] = [];
   for (const b of bookings) {
     const [cust, pays, proofs, match] = await Promise.all([
@@ -99,7 +83,36 @@ export async function getOpsToday(venue: Venue, dateISO: string): Promise<{ cour
       hasMatch: ((match as { count: number | null }).count ?? 0) > 0,
     });
   }
-  return { courts: courtList, bookings: result };
+  return result;
+}
+
+export async function getOpsToday(venue: Venue, dateISO: string): Promise<{ courts: Court[]; bookings: OpsBooking[] }> {
+  return getOpsRange(venue, dateISO, dateISO);
+}
+
+/** Bookings for a venue across an inclusive [fromDateISO, toDateISO] day range (venue tz). */
+export async function getOpsRange(
+  venue: Venue,
+  fromDateISO: string,
+  toDateISO: string,
+): Promise<{ courts: Court[]; bookings: OpsBooking[] }> {
+  const sb = db();
+  const tz = venue.timezone;
+  const rangeStart = fromZonedTime(`${fromDateISO}T00:00:00`, tz);
+  const rangeEnd = new Date(fromZonedTime(`${toDateISO}T00:00:00`, tz).getTime() + 24 * 3600_000);
+
+  const { data: courts } = await sb.from("courts").select("*").eq("venue_id", venue.id).order("name");
+  const { data: rows } = await sb
+    .from("bookings")
+    .select("*")
+    .eq("venue_id", venue.id)
+    .gte("starts_at", rangeStart.toISOString())
+    .lt("starts_at", rangeEnd.toISOString())
+    .order("starts_at");
+
+  const courtList = (courts as Court[]) ?? [];
+  const bookings = await hydrateOpsBookings((rows as Booking[]) ?? [], courtList);
+  return { courts: courtList, bookings };
 }
 
 async function loadBooking(id: string): Promise<Booking> {
